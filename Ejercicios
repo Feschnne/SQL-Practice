@@ -1,0 +1,398 @@
+-- GPT --
+
+ENUNCIADO
+
+"Obtener el nombre del cliente, la ciudad, y el total gastado de aquellos clientes que:
+ - Hayan tenido al menos 2 pedidos
+ - Y que su primer pedido (el más antiguo haya sido mayor de 100€)
+Ordenar el resultado por total gastado DESC"
+
+1. ANÁLISIS DE COMPRENSIÓN LECTORA
+
+FRASE DEL ENUNCIADO         QUÉ SIGNIFICA A NIVEL SQL        POR QUÉ
+nombre y ciudad             columnas directas                vienen de clientes -> SELECT
+total gastado               sum(total_pedidos)               agregado
+al menos dos pedidos        count(id_pedido) > 2             condición agregada
+primer pedido > 100         MIN(total_pedido) > 100          primer pedido = "más antiguo" -> MIN del importe
+ordenar por total gastado   order by sum(total_pedido) DESC  orden agregado
+
+CONCLUSIÓN CLAVE: Este enunciado contiene dos agregaciones -> SUM() Y COUNT() Y MIN() --- por tanto ---> necesita GROUP BY y HAVING
+
+2. SQL
+
+SELECT c.nombre,
+       c.ciuddad, 
+       SUM(p.total_pedido) AS total_gastado
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING COUNT(p.id_pedido) > 1 AND MIN(p.total_pedido) > 100
+ORDER BY total_gastado DESC;
+
+-- YO --
+--1--
+ENUNCIADO ->
+
+Obtener el nombre, la ciudad y el número de pedidos de los clientes que:
+ - Sean de Madrid o Sevilla
+ - Y cuyo importe medio (average) de pedido sea mayor que 90€
+
+MI SQL ->
+
+SELECT c.nombre, c.ciudad,
+       COUNT(id_pedido) as num_pedidos,
+       AVG(total_pedido) as importe_medio,
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING (ciudad = 'Madrid' or ciudad = 'Sevilla') AND (AVG(total_pedido) > 90);
+
+CORRECIÓN -> 
+
+SELECT c.nombre, 
+       c.ciudad, 
+       COUNT(p.id_pedido) AS num_pedidos, 
+       AVG(p.total_pedido) AS importe_medio
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.ciudad IN ('Madrid', 'Sevilla')
+GROUP BY c.nombre, c.ciudad
+HAVING AVG(p.total_pedido) > 90
+ORDER BY num_pedidos DESC;
+
+PARTE                    MOTIVO                                          BLOQUE
+ciudad                   no agregada, filtra filas individuales          where
+avg(total_pedido) > 90   necesita agregación                             having
+COUNT(id_pedido)         métrica a mostrar                               select
+GROUP BY                 porque hay agregados y columnas no agregadas    group by
+
+--2--
+ENUNCIADO->
+
+Obtener el nombre, la ciudad, el total gastado y el importe medio de pedido solo de los clientes cuyo importe
+máximo de medido haya sido mayor que 200€ y que hayan realizado al menos 2 pedidos.
+Ordenar por total gastado descendente
+
+SELECT c.nombre, 
+       c.ciudad, 
+       SUM(p.total_pedido) as total_gastado,
+       AVG(p.total_pedido) as importe_medio
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING MAX(p.total_pedido) > 200 AND COUNT(p.id_pedido) > 1
+ORDER BY p.total_gastado DESC;
+
+CORRECIÓN -> Todo estaba bien
+
+--3--
+ENUNCIADO ->
+
+Obtener el nombre, número de pedidos, el máximo total pedido y el mínimo total pedido SOLO de los clientes cuyo
+importe medio sea entre 80 y 150€. Y además, mostrar solo los clientes que NO son de Madrid Y ordenar el resultado
+por diferencia entre máximo y mínimo total de pedido, de mayor a menor.
+
+SELECT c.nombre,
+       COUNT(p.id_pedido) as num_pedidos,
+       MAX(total_pedido) as maximo_total_pedido,
+       MIN(total_pedido) as minimo_total_pedido, 
+       AVG(total_pedido) as importe_medio
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.ciudad <> 'Madrid'
+GROUP BY c.nombre
+HAVING AVG(p.total_pedido) BETWEEN 80 AND 150
+ORDER BY sum(p.total_pedido) DESC;
+
+CORRECIÓN -> 
+
+Lo único que estaba mal es ORDER BY.
+ORDER BY MAX(p.total_pedido) - MIN(p.total_pedido) DESC;
+
+--4--
+ENUNCIADO ->
+
+Obtener nombre, ciudad, número total de pedidos, importe máximo y mínimo, pero SOLO de clientes que:
+ - Se dieron de alta a partir de enero 2023
+ - Y cuyo total gastado sea mayor de 250€
+ - Y además odernar el resultado por importe medio de pedido de mayor a menor.
+
+SELECT c.nombre,
+       c.ciudad, 
+       COUNT(p.id_pedido) AS total_pedidos,
+       MAX(p.total_pedido) AS maximo_pedido,
+       MIN(p.total_pedido) AS minimo_pedido
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.fecha_alta > '2023-01-01'
+GROUP BY c.nombre, c.ciudad
+HAVING SUM(p.total_pedido) > 250
+ORDER BY AVG(p.total_pedido) DESC;
+
+CORRECIÓN ->
+
+Falta incluir AVG(total_pedido) en el SELECT porque lo estoy usando en el ORDER BY. Aunque no siempre es 
+obligatorio incluirlo en SELECT, para claridad en este tipo de ejericcios sí lo queremos ver.
+
+--5 GPT--
+ENUNCIADO ->
+
+Obtener nombre, ciudad, número de pedidos, y una clasificación textual:
+- Si el total gastado > 300 -> "High Spender"
+- Si el total gastado entre 150 y 300 -> "Medium Spender"
+- Sino -> "Low Spender"
+- Y solo queremos clientes con más de 1 pedido
+- Ordenado por total gastado descendente.
+
+SELECT c.nombre, 
+       c.ciudad,
+       COUNT(p.id_pedido) as num_pedidos, 
+       SUM(p.total_pedido) as total_gastado,
+       CASE
+          WHEN SUM(p.total_pedido) > 300 THEN 'High Spender'
+          WHEN SUM(p.total_pedido) BETWEEN 150 AND 300 THEN 'Medium Spender'
+          ELSE 'Low Spender'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING COUNT(p.id_pedido) > 1
+ORDER BY total_gastado DESC;
+
+--6--
+ENUNCIADO->
+
+Obtener nombre, ciudad, número de pedidos, total gastado y una clasificación según gasto:
+ - total gastado > 300 "super vip"
+ - 200-300 -> vip
+ - 100-200 -> regular
+ - <100 ->
+ - filtrar solo clientes con más de un pedido y cuyo importe minimo de pedido sea mayor de 50€
+ - ordenar por total gastado descendente
+
+SELECT c.nombre,
+       c.ciudad, 
+       count(p.id_pedido) as num_pedidos,
+       sum(p.total_pedido) as total_gastado,
+       CASE
+        WHEN sum(p.total_pedido) > 300 then 'SUPER VIP'
+        WHEN sum(p.total_pedido) BETWEEN 200 AND 300 then 'VIP'
+        WHEN sum(p.total_pedido) BETWEEN 100 AND 200 then 'REGULAR'
+        ELSE 'LOW'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING count(p.id_pedido) > 1 AND MIN(p.total_pedido) > 50
+ORDER BY total_gastado DESC;
+
+--7--
+ENUNCIADO->
+
+Obtener nombre, ciudad, número de pedidos, total gastado, importe medio y una clasificación:
+ - total gastado > 300 -> super vip
+ - entre 200 y 300 -> vip
+ - entre 100 y 200 -> regular
+ - <100 -> low
+ - además, flitra solo clientes que: tengan mñas de 1 pedido cuyo importe maximo de pedido sea mayor de 250€
+ - ordena por importe mdio de pedido descendiente
+
+SELECT c.nombre,
+       c.ciudad, 
+       count(id_pedido) as num_pedidos,
+       sum(total_pedido) as total_gastado,
+       max(total_pedido) as max_pedido,
+       avg(total_pedido) as importe_medio,
+       CASE
+        WHEN total_gastado > 300 then 'Super Vip'
+        WHEN total_gastado between 200 and 300 then 'vip'
+        WHEN total_gastado between 100 and 200 then 'regular'
+        else 'low'    
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING count(id_pedido) > 1 OR MAX(total_pedido) > 250
+ORDER BY AVG(total_pedido) DESC;
+
+CORRECIÓN->
+
+Añadir los prefijos de las tablas en SELECT 
+No se puede usar un alias de SELECT dentro de SELECT, por lo tanto, debo reemplazar por el cálculo real en CASE:
+sum(p.total_pedido)...
+
+--8--
+ENUNCIADO->
+
+Obtener nombre, ciudad, numero de pedidos, total gastado, importe medio, importe maximo y una clasificación avanzada:
+ - si total gastado > 300 e importe maximo > 150 -> super vip
+ - si total gastado entre 200 y 300 o importe maximo entre 120-150 -> vip
+ - si total gastado entre 100 - 200 y numero de pedidos > 1 -> regular
+ - en cualquier otr caso -> low
+ - clientes con pedido mínimno > 50
+ - clientes con fecha_alta >= 2023-01-01
+ - ordenar por diferencia entre máximo y mínimo total del pedido decendente
+
+SELECT c.nombre,
+       c.ciudad,
+       count(p.id_pedido) as num_pedido,
+       sum(p.total_pedido) as total_gastado,
+       avg(p.total_pedido) as importe_medio,
+       max(p.total_pedido) as importe_maximo,
+       CASE
+        WHEN sum(p.total_pedido) > 300 AND max(p.total_pedido) > 150 then 'Super Vip'
+        WHEN sum(p.total_pedido) BETWEEN 200 AND 300 or max(p.total_pedido) BETWEEN 120 AND 150 then 'vip'
+        WHEN sum(p.total_pedido) BETWEEN 100 AND 200 AND count(p.total_pedido) > 1 then 'regular'
+        ELSE 'Low'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING p.total_pedido > 50 AND c.fecha_alta >= '2023-01-01'
+ORDER BY MAX(p.total_pedido) - MIN(p.total_pedido) DESC;
+
+CORRECIÓN ->
+
+WHERE c.fecha_alta >= '2023-01-01' // Having solo ve agregados, y fecha alta no ha sido resultado de ningun agregado
+HAVING MIN(p.total_pedido) > 50 
+
+--9--
+ENUNCIADO->
+
+Obtener el nombre, ciudad, numero de pedidos y total gastado de los clientes que:
+ - sean de madrid o valencia
+ - tengan mas de 1 pedido
+Ordenar por total gasstado descendente
+
+SELECT c.nombre, 
+       c.ciudad, 
+       count(p.id_pedido) as num_pedido,
+       sum(p.total_pedido) as total_gastado
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.ciudad IN ('Madrid','Valencia')
+GROUP BY c.nombre, c.ciudad
+HAVING count(p.id_pedido) > 1
+ORDER BY total_gastado DESC;
+
+--10--
+ENUNCIADO ->
+
+Obtener el nombre, ciudad, número de pedidos, total gastado e importe medio de los clientes que:
+ - su importe máximo de edido sea mayor de 200
+ - y hayan realizado al menos 2 pedidos
+Además, clasificar a los clientes segun total gastado:
+ - 300 -> super vip
+ - 200-300 -> vip
+ - 100-200 -> regular
+ - <100 -< low
+Ordenar por importe mdio descendente
+
+SELECT c.nombre, 
+       c.ciudad,
+       count(p.id_pedido) as num_pedido,
+       sum(p.total_pedido) as total_gastado,
+       avg(p.total_pedido) as importe_medio,
+       max(p.total_pedido) as max_pedido,
+       CASE
+        WHEN sum(p.total_pedido) > 300 then 'super vip'
+        WHEN sum(p.total_pedido) between 200 and 300 then 'vip'
+        WHEN sum(p.total_pedido) between 100 and 200 then 'regular'
+        ELSE 'low'
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.nombre, c.ciudad
+HAVING max(p.total_pedido) > 200 AND count(p.id_pedido) >= 2
+ORDER BY avg(p.total_pedido) DESC;
+
+CORRECIÓN ->
+
+Todo CASE debe terminar con END AS alias
+Es mejor usar mayusculas consistentes en las cadenas
+
+--10--
+ENUNCIADO->
+
+Obtener nombre, ciudad, numero de pedidos, total gastado, importe maximo, importe minimo y 
+una clasificación segun total gastado y maximo pedido:
+ - total gastado > 300 y maximo pedido > 150 -> super vip
+ - total gastado entre 200 y 300 o maximo pedido entre 120 y 150 -> vip
+ - total gastado entre 100 y 200 y numero de pedidos > 1 -> regular
+ - resto -> low
+Filtros:
+ - Clientes con pedido mínimo > 50
+ - clientes con fecha_alta >= 2023-01-01
+
+SELECT c.nombre, c.ciudad, count(p.id_pedido), sum(p.total_pedido), max(p.total_pedido), min(p.total_pedido),
+       CASE
+        WHEN sum(p.total_pedido) > 300 AND MAX(p.total_pedido) > 150 then 'SUPER VIP'
+        WHEN sum(p.total_pedido) BETWEEN 200 AND 300 OR MAX(p.total_pedido) BETWEEN 120 AND 150 then 'VIP'
+        WHEN sum(p.total_pedido) BETWEEN 100 AND 200 AND COUNT(p.id_pedido) > 1 then 'REGULAR'
+        ELSE 'LOW'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.fecha_alta >= '2023-01-01'
+GROUP BY c.nombre, c.ciudad
+HAVING MIN(p.total_pedido) > 50
+ORDER BY MAX(p.total_pedido) - MIN(p.total_pedido) DESC;
+
+--11--
+ENUNCIADO->
+
+Obtener nombre, ciudad, numero de pedidos, total gastado, importe maximo, importe minimo y una clasificaciñon
+avanzada: 
+ - total gastado > 300 y número de pedidos > 3 → “SUPER VIP”
+ - total gastado entre 200–300 o importe máximo entre 150–200 → “VIP”
+ - total gastado entre 100–200 y pedido mínimo > 50 → “REGULAR”
+ - resto → “LOW”
+Filtros:
+ - Clientes con fecha_alta >= '2023-01-01'
+ - Clientes con más de 1 pedido o cuyo importe máximo > 100
+Ordenar por diferencia entre máximo y mínimo pedido descendente y luego por total gastado descendente
+
+SELECT c.nombre, c.ciudad, count(p.id_pedido), sum(p.total_pedido), max(p.total_pedido), min(p.total_pedido),
+       CASE  
+        WHEN SUM(p.total_pedido) > 300 AND COUNT(p.total_pedidos) > 3 THEN 'super vip'
+        WHEN SUM(p.total_pedido) BETWEEN 200 AND 300 OR MAX(p.total_pedido) BETWEEN 150 AND 200 THEN 'VIP'
+        WHEN SUM(p.total_pedido) BETWEEN 100 AND 200 AND MIN(p.total_pedido) > 50 THEN 'regular' 
+        ELSE 'LOW'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.fecha_alta >= '2023-01-01'
+GROUP BY c.nombre, c.ciudad
+HAVING COUNT(p.id_pedido) > 1 OR MAX(p.total_pedido) > 100
+ORDER BY MAX(p.total_pedido) - MIN(p.total_pedido) DESC, p.total_gastado DESC;
+
+--12--
+ENUNCIADO->
+
+Obtener nombre, ciudad, numero de pedidos, total gastado, importe medio, importe maximo, importe minimo, y una 
+clasificación avanzada de clientes segun total gastado y numero de pedidos:
+ - total gastado > 400 y numero de pedidos > 5 -> elite
+ - total gastado entre 300 y 400 o importe máximo entre 200 y 300 -> super vip
+ - total gastado entre 150 y 300 y numero de pedidos > 2 -> vip
+ - resto -> regular
+Filtros:
+ - Clientes con fecha alta >= 2023-01-01
+ - clientes con pedido minimo > 50 e importe medio > 80
+Ordenar por:
+diferencia entre máximo y mínimo pedido descendente, 
+total gastado descendente
+numero de pedidos descendente
+
+SELECT c.nombre, c.ciudad, count(p.id_pedido) as num_pedido, sum(p.total_pedido) as total_gastado, avg(p.total_pedido) as importe_medio, 
+       max(p.total_pedido) as importe_maximo, min(p.total_pedido) as importe_minimo,
+       CASE
+        WHEN sum(p.total_pedido) > 400 AND count(p.id_pedido) > 5 THEN 'ELITE'
+        WHEN sum(p.total_pedido) BETWEEN 300 AND 400 OR max(p.total_pedido) BETWEEN 200 AND 300 then 'SUPER VIP'
+        WHEN sum(p.total_pedido) BETWEEN 150 AND 300 AND count(p.id_pedido) > 2 then 'VIP'
+        ELSE 'REGULAR'
+       END AS categoria
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+WHERE c.fecha_alta >= '2023-01-01'
+GROUP BY c.nombre, c.ciudad
+HAVING min(p.total_pedido) > 50 AND avg(p.total_pedido) > 80
+ORDER BY max(p.total_pedido) - min(p.total_pedido) DESC, total_gastado DESC, num_pedido DESC;
