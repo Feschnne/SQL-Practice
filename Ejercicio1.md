@@ -513,15 +513,6 @@ que estas procesando.
 
 Ejemplo: Obtener los clientes cuyo total gastado sea mayor que la media de todos los clientes.
 
-Se refiere a datos que ninguna columna da?
-Pero poreque para saber la media de todos los clientes no puedo hacer tipo. 
-Select avg(total_cliente) AS promedio_total
-from clientes c
-join pedidos p on c.id_cliente = p.id_cliente
-group by c.id_cliente
-y que tipos de enunciados hay para este tipo de subconsultas? asi puedo ver diferentes ejemplos e ir acostumbrandome a sus enunciados así como también encontrar
-patrones en los enunciados que me ayuden a poder diferenciarlos
-
 1. Primero necesitas saber la media de todos los clientes -> no es un valor que esté en la tabla, tienes que calcularlo:
 ```
 SELECT AVG(total_cliente) AS promedio_total
@@ -562,7 +553,57 @@ Subconsulta necesaria porque AVG(total_cliente) depende de todos los clientes y 
 | Solo necesitas filtrar por condiciones simples de la misma fila o tabla       | ❌ No                   | WHERE ciudad = 'Madrid'                                        |
 
 
+Si haces: 
+```
+SELECT AVG(total_cliente) AS promedio_total
+FROM clientes c
+JOIN pedidos p ON c.id_cliente = p.id_cliente
+GROUP BY c.id_cliente;
+```
 
+Esto no te da un solo valor, sino un conjunto de medias por cliente:
+| id_cliente | total_cliente |
+| ---------- | ------------- |
+| 1          | 320           |
+| 2          | 180           |
+| 3          | 270           |
+
+ - Cada fila es la suma de un cliente
+ - AVG(...) sobre esta consulta con GROUP BY seguiría devolviendo varias filas, no un único número global.
+
+Para obterner un solo valor global (la media de todos los clientes) necesitamos una subconsulta que agregue primero por cliente y luego tome la media de esos resultados:
+```
+SELECT AVG(total_cliente) AS promedio_total
+FROM (
+    SELECT SUM(p.total_pedido) AS total_cliente
+    FROM clientes c
+    JOIN pedidos p ON c.id_cliente = p.id_cliente
+    GROUP BY c.id_cliente
+) AS sub;
+```
+Ahora la subconsulta devuelve
+| promedio_total |
+| -------------- |
+| 256            |
+
+ - Este es un solo valor, que ya puedes usar para comparar con cada cliente en HAVING
+
+### TIPOS DE ENUNCIADOS QUE REQUIEREN SUBCONSULTAS
+En general, los subqueries aparecen cuando el enunciado pide comparar, filtrar o relacionar con un valor que no existe directamente en la tabla. Algunos patrones comunes:
+| Patrón de enunciado                                                     | Qué hacer / Subconsulta necesaria?                                 |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Clientes cuyo total sea **mayor que el promedio de todos los clientes** | Subconsulta para calcular la media global                          |
+| Clientes cuyo total sea **mayor que el máximo de otra tabla**           | Subconsulta para obtener el máximo                                 |
+| Productos que se vendieron **más que la media de ventas por categoría** | Subconsulta agrupando por categoría                                |
+| Clientes que han hecho pedidos **mayores que su promedio personal**     | Subconsulta para calcular AVG por cliente dentro de la misma tabla |
+| Filtrar según resultados de otra consulta compleja                      | Subconsulta en WHERE o FROM                                        |
+
+### CÓMO DETECTARLO EN UN ENUNCIADO
+1. "Mayor que la media de todos...", "menor que el máximo de...", "más que X"
+2. "Comparar con un valor calculado sobre todos los registros"
+3. "Filtrar según un resultado agregado de otra tabla"
+
+Si ves alguna de estas frases, piensa Subconsulta.
 
 
 
